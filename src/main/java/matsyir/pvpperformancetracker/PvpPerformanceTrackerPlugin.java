@@ -66,6 +66,7 @@ import lombok.extern.slf4j.Slf4j;
 import matsyir.pvpperformancetracker.controllers.FightPerformance;
 import matsyir.pvpperformancetracker.controllers.Fighter;
 import matsyir.pvpperformancetracker.models.CombatLevels;
+import matsyir.pvpperformancetracker.models.AnimationData;
 import matsyir.pvpperformancetracker.models.FightLogEntry;
 import matsyir.pvpperformancetracker.models.HitsplatInfo;
 import matsyir.pvpperformancetracker.models.RangeAmmoData;
@@ -883,14 +884,34 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 						// Fallback to current ratio/scale if polled is unavailable
 						if (ratio < 0 || scale <= 0) { ratio = opponent.getHealthRatio(); scale = opponent.getHealthScale(); }
 						int hpBefore = -1;
+						int hpBeforeThisCycle = -1;
 						if (ratio >= 0 && scale > 0 && maxHpToUse > 0)
 						{
 							hpBefore = PvpPerformanceTrackerUtils.calculateHpBeforeHit(ratio, scale, maxHpToUse, entry.getActualDamageSum());
+							hpBeforeThisCycle = PvpPerformanceTrackerUtils.calculateHpBeforeHit(ratio, scale, maxHpToUse, damageThisCycle);
 						}
 						if (hpBefore > 0)
 						{
 							entry.setEstimatedHpBeforeHit(hpBefore);
 							entry.setOpponentMaxHp(maxHpToUse);
+						}
+
+						// Capture phase snapshots for Dragon Claws (2 hits tick k, 2 hits tick k+1)
+						if (entry.getAnimationData() == AnimationData.MELEE_DRAGON_CLAWS_SPEC)
+						{
+							int matched = entry.getMatchedHitsCount();
+							// End of phase 1: matched should be 2 after first tick
+							if (matched == 2 && entry.getClawsHpBeforePhase1() == null && hpBeforeThisCycle > 0)
+							{
+								entry.setClawsHpBeforePhase1(hpBeforeThisCycle);
+								entry.setClawsPhase1Damage(damageThisCycle);
+								entry.setClawsHpAfterPhase1(hpBeforeThisCycle - damageThisCycle);
+							}
+							// Beginning of phase 2: when final hits match, record the HP before this cycle
+							if (matched >= entry.getExpectedHits() && entry.getClawsHpBeforePhase2() == null && hpBeforeThisCycle > 0)
+							{
+								entry.setClawsHpBeforePhase2(hpBeforeThisCycle);
+							}
 						}
 					}
 				}
@@ -979,9 +1000,36 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 						entry.setDisplayHpBefore(hpBeforeCurrent);
 						entry.setDisplayHpAfter(hpAfterCurrent);
 
-						Double koChanceCurrent = (hpBeforeCurrent != null)
-							? PvpPerformanceTrackerUtils.calculateKoChance(entry.getAccuracy(), entry.getMinHit(), entry.getMaxHit(), hpBeforeCurrent)
-							: null;
+						Double koChanceCurrent = null;
+						// Special handling for Dragon Claws multi-tick spec: compute attempt-level KO at completion only
+						boolean isClawsSpec = entry.getAnimationData() == AnimationData.MELEE_DRAGON_CLAWS_SPEC && entry.getExpectedHits() >= 4;
+						if (isClawsSpec)
+						{
+							if (hpBeforeCurrent != null && entry.getMatchedHitsCount() >= entry.getExpectedHits())
+							{
+								int healBetween = 0;
+								Integer hpAfterP1 = entry.getClawsHpAfterPhase1();
+								Integer hpBeforeP2 = entry.getClawsHpBeforePhase2();
+								if (hpAfterP1 != null && hpBeforeP2 != null)
+								{
+									healBetween = Math.max(0, hpBeforeP2 - hpAfterP1);
+								}
+								// Two-phase model: attempt-level KO across two ticks using observed inter-tick healing
+								koChanceCurrent = PvpPerformanceTrackerUtils.calculateClawsTwoPhaseKo(entry.getAccuracy(), entry.getMaxHit(), hpBeforeCurrent, healBetween);
+							}
+						}
+						else
+						{
+							koChanceCurrent = (hpBeforeCurrent != null)
+								? PvpPerformanceTrackerUtils.calculateKoChance(entry.getAccuracy(), entry.getMinHit(), entry.getMaxHit(), hpBeforeCurrent)
+								: null;
+						}
+
+						// Do not record/display zero-percent KO chances
+						if (koChanceCurrent != null && koChanceCurrent <= 0.0)
+						{
+							koChanceCurrent = null;
+						}
 						entry.setDisplayKoChance(koChanceCurrent);
 						entry.setKoChance(koChanceCurrent);
 

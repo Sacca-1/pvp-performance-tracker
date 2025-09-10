@@ -117,6 +117,106 @@ public class PvpPerformanceTrackerUtils
 		return hpAfter + damageSum;
 	}
 
+	/**
+	 * Attempt-level KO probability for Dragon Claws special across two ticks, using observed inter-tick healing.
+	 *
+	 * Inputs are the spec-level accuracy and maxHit from PvpDamageCalc (where claws set max = 2*base + 1 and
+	 * accuracy = 1 - (1 - a)^4). We derive the base per-swing accuracy 'a' and base max 'M', then sum over
+	 * all base rolls H in [0..M] and the first-connect case (E1..E4) to determine D1 (tick k) and D2 (tick k+1).
+	 * We then compute: KO = sum_{H,case} P(H,case) * [ D1 >= hpBefore ? 1 : (D2 >= hpBefore - D1 + healBetween ? 1 : 0) ].
+	 */
+	public static Double calculateClawsTwoPhaseKo(double specAccuracy, int specMaxHit, int hpBefore, int healBetween)
+	{
+		if (specMaxHit <= 0 || hpBefore <= 0)
+		{
+			return null;
+		}
+
+		// Clamp inputs
+		double accSpec = Math.max(0.0, Math.min(1.0, specAccuracy));
+		int M = Math.max(0, (specMaxHit - 1) / 2); // base single-swing max
+
+		if (M <= 0)
+		{
+			return null;
+		}
+
+		// Derive base per-swing accuracy 'a' from spec-level accuracy: accSpec = 1 - (1 - a)^4
+		double a;
+		if (accSpec <= 0)
+		{
+			a = 0.0;
+		}
+		else if (accSpec >= 1.0)
+		{
+			a = 1.0;
+		}
+		else
+		{
+			a = 1.0 - Math.pow(1.0 - accSpec, 0.25);
+		}
+		double q = 1.0 - a;
+		double p1 = a;
+		double p2 = q * a;
+		double p3 = q * q * a;
+		double p4 = q * q * q * a;
+
+		double invCount = 1.0 / (M + 1); // uniform over H in [0..M]
+		double ko = 0.0;
+
+		for (int H = 0; H <= M; H++)
+		{
+			// Precompute fragments
+			int halfCeil = (H + 1) / 2;
+			int halfFloor = H / 2;
+			int quarterFloor = H / 4;
+			int threeQuarterCeil = (int) Math.ceil(0.75 * H);
+			int threeQuarterFloor = (int) Math.floor(0.75 * H);
+
+			// E1: first connects
+			{
+				int h1 = H;
+				int h2 = halfCeil;
+				int h3 = quarterFloor;
+				int used = h1 + h2 + h3;
+				int r = Math.max(0, 2 * H - used);
+				int D1 = h1 + h2;
+				int D2 = h3 + r;
+				double term = p1 * invCount * ((D1 >= hpBefore) ? 1.0 : ((D2 >= (hpBefore - D1 + healBetween)) ? 1.0 : 0.0));
+				ko += term;
+			}
+
+			// E2: second connects
+			{
+				int D1 = H; // tick k sum
+				int D2 = H; // tick k+1 sum = ceil(H/2)+floor(H/2)
+				double term = p2 * invCount * ((D1 >= hpBefore) ? 1.0 : ((D2 >= (hpBefore - D1 + healBetween)) ? 1.0 : 0.0));
+				ko += term;
+			}
+
+			// E3: third connects (first two miss) -> all on tick k+1
+			{
+				int D1 = 0;
+				int D2 = threeQuarterCeil + threeQuarterFloor; // ~ round(1.5 * H)
+				double term = p3 * invCount * ((D1 >= hpBefore) ? 1.0 : ((D2 >= (hpBefore - D1 + healBetween)) ? 1.0 : 0.0));
+				ko += term;
+			}
+
+			// E4: fourth connects (first three miss) -> all on tick k+1
+			{
+				int D1 = 0;
+				int D2 = threeQuarterCeil + threeQuarterFloor; // same total
+				double term = p4 * invCount * ((D1 >= hpBefore) ? 1.0 : ((D2 >= (hpBefore - D1 + healBetween)) ? 1.0 : 0.0));
+				ko += term;
+			}
+		}
+
+		// Clamp numerical noise
+		if (ko < 0.0) ko = 0.0;
+		if (ko > 1.0) ko = 1.0;
+		return ko;
+	}
+
     public static int getSpriteForSkill(Skill skill)
     {
         switch (skill)

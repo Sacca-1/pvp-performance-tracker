@@ -192,6 +192,22 @@ public class FightLogEntry implements Comparable<FightLogEntry>
 	@Getter @Setter
 	private boolean isPartOfTickGroup = false;
 
+	// Transient fields for multi-tick special handling (Dragon Claws)
+	// Not serialized; used to capture per-phase HP snapshots and damage
+	private transient Integer clawsPhase1Damage = null;
+	private transient Integer clawsHpBeforePhase1 = null;
+	private transient Integer clawsHpAfterPhase1 = null;
+	private transient Integer clawsHpBeforePhase2 = null;
+
+	public Integer getClawsPhase1Damage() { return clawsPhase1Damage; }
+	public void setClawsPhase1Damage(Integer v) { this.clawsPhase1Damage = v; }
+	public Integer getClawsHpBeforePhase1() { return clawsHpBeforePhase1; }
+	public void setClawsHpBeforePhase1(Integer v) { this.clawsHpBeforePhase1 = v; }
+	public Integer getClawsHpAfterPhase1() { return clawsHpAfterPhase1; }
+	public void setClawsHpAfterPhase1(Integer v) { this.clawsHpAfterPhase1 = v; }
+	public Integer getClawsHpBeforePhase2() { return clawsHpBeforePhase2; }
+	public void setClawsHpBeforePhase2(Integer v) { this.clawsHpBeforePhase2 = v; }
+
 	public FightLogEntry(Player attacker, Player defender, PvpDamageCalc pvpDamageCalc, int attackerOffensivePray, CombatLevels levels, AnimationData animationData)
 	{
 		this.isFullEntry = true;

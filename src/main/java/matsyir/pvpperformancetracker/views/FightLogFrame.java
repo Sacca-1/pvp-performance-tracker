@@ -94,11 +94,11 @@ public class FightLogFrame extends JFrame
 		}
 
 		setIconImage(PLUGIN_ICON);
-		setSize(860, 503); // Reverted width increase, removed debug columns
+		setSize(900, 503);
 		setLocation(rootPane.getLocationOnScreen());
 
 		JPanel mainPanel = new JPanel(new BorderLayout(4, 4));
-		Object[][] stats = new Object[fightLogEntries.size()][14]; // Updated column count to include Actual Dmg
+		Object[][] stats = new Object[fightLogEntries.size()][15];
 		int i = 0;
 		int initialTick = 0;
 
@@ -188,11 +188,31 @@ public class FightLogFrame extends JFrame
 				durationMillis % 1000 / 100) + " (" + tickDuration + ")";
 			stats[i][13] = time;
 
+			// Inter-tick Heal (Index 14) - Debug: only meaningful for claws spec
+			if (fightEntry.getAnimationData() == AnimationData.MELEE_DRAGON_CLAWS_SPEC)
+			{
+				Integer afterP1 = fightEntry.getClawsHpAfterPhase1();
+				Integer beforeP2 = fightEntry.getClawsHpBeforePhase2();
+				if (afterP1 != null && beforeP2 != null)
+				{
+					int healBetween = Math.max(0, beforeP2 - afterP1);
+					stats[i][14] = healBetween;
+				}
+				else
+				{
+					stats[i][14] = "";
+				}
+			}
+			else
+			{
+				stats[i][14] = "";
+			}
+
 			i++;
 		}
 
 		String[] header = { "Attacker", "Style", "Hit Range", "Accuracy", "Avg Hit", "Actual Dmg", "HP", "KO Chance", "Special?",
-		"Off-Pray?", "Def Prayer", "Splash", "Offensive Pray", "Time, (Tick)" };
+		"Off-Pray?", "Def Prayer", "Splash", "Offensive Pray", "Time, (Tick)", "Inter-tick Heal" };
 		table = new JTable(stats, header);
 		table.setRowHeight(30);
 		table.setDefaultEditor(Object.class, null);
