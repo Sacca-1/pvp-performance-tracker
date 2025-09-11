@@ -267,6 +267,12 @@ class Fighter
 
 		FightLogEntry fightLogEntry = new FightLogEntry(player, opponent, pvpDamageCalc, offensivePray, levels, animationData);
 		fightLogEntry.setGmaulSpecial(isGmaulSpec);
+
+		// Record last non-GMaul special tick for simple GMaul gating
+		if (animationData.isSpecial && animationData != AnimationData.MELEE_GRANITE_MAUL_SPEC)
+		{
+			PvpPerformanceTrackerPlugin.PLUGIN.recordNonGmaulSpecial(player.getName(), fightLogEntry.getTick());
+		}
 		if (PvpPerformanceTrackerPlugin.CONFIG.fightLogInChat())
 		{
 			PvpPerformanceTrackerPlugin.PLUGIN.sendTradeChatMessage(fightLogEntry.toChatMessage());
