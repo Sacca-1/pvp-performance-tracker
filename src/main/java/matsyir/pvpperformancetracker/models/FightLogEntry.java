@@ -91,8 +91,8 @@ public class FightLogEntry implements Comparable<FightLogEntry>
 	private AnimationData animationData;
 	@Setter
 	@Expose
-	@SerializedName("d")
-	private double deservedDamage;
+	@SerializedName("d") // Note: Previously referred to as 'deserved damage'
+	private double avgDamage;
 	@Expose
 	@SerializedName("a")
 	private double accuracy;
@@ -223,7 +223,7 @@ public class FightLogEntry implements Comparable<FightLogEntry>
 		this.attackerGear = attacker.getPlayerComposition().getEquipmentIds();
 		this.attackerOverhead = attacker.getOverheadIcon();
 
-		this.deservedDamage = pvpDamageCalc.getAverageHit();
+		this.avgDamage = pvpDamageCalc.getAverageHit();
 		this.accuracy = pvpDamageCalc.getAccuracy();
 		this.minHit = pvpDamageCalc.getMinHit();
 		this.maxHit = pvpDamageCalc.getMaxHit();
@@ -268,7 +268,7 @@ public class FightLogEntry implements Comparable<FightLogEntry>
 		this.attackerGear = e.attackerGear;
 		this.attackerOverhead = e.attackerOverhead;
 		this.animationData = e.animationData;
-		this.deservedDamage = pvpDamageCalc.getAverageHit();
+		this.avgDamage = pvpDamageCalc.getAverageHit();
 		this.accuracy = pvpDamageCalc.getAccuracy();
 		this.minHit = pvpDamageCalc.getMinHit();
 		this.maxHit = pvpDamageCalc.getMaxHit();
@@ -285,13 +285,13 @@ public class FightLogEntry implements Comparable<FightLogEntry>
 	}
 
 	// randomized entry used for testing
-	public FightLogEntry(int [] attackerGear, int deservedDamage, double accuracy, int minHit, int maxHit, int [] defenderGear, String attackerName)
+	public FightLogEntry(int [] attackerGear, int avgDamage, double accuracy, int minHit, int maxHit, int [] defenderGear, String attackerName)
 	{
 		this.attackerName = attackerName;
 		this.attackerGear = attackerGear;
 		this.attackerOverhead = HeadIcon.MAGIC;
 		this.animationData = Math.random() <= 0.5 ? AnimationData.MELEE_DAGGER_SLASH : AnimationData.MAGIC_ANCIENT_MULTI_TARGET;
-		this.deservedDamage = deservedDamage;
+		this.avgDamage = avgDamage;
 		this.accuracy = accuracy;
 		this.minHit = minHit;
 		this.maxHit = maxHit;
@@ -320,7 +320,7 @@ public class FightLogEntry implements Comparable<FightLogEntry>
 			.append(Color.BLACK, "  Acc: ")
 			.append(darkRed, nf.format(accuracy))
 			.append(Color.BLACK, "  AvgHit: ")
-			.append(darkRed, nf.format(deservedDamage))
+			.append(darkRed, nf.format(avgDamage))
 			.append(Color.BLACK, " Spec?: ")
 			.append(darkRed, animationData.isSpecial ? "Y" : "N")
 			.append(Color.BLACK, " OffP?:")

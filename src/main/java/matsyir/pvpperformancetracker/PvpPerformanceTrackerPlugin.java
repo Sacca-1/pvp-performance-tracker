@@ -39,7 +39,6 @@ import java.io.FileWriter;
 import java.io.Writer;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -53,7 +52,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.time.temporal.ChronoUnit;
 import javax.inject.Inject;
 import javax.swing.ImageIcon;
 import javax.swing.JDialog;
@@ -88,8 +86,8 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.InteractingChanged;
-
 import net.runelite.api.events.StatChanged;
+import net.runelite.api.events.PlayerDespawned;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageManager;
@@ -107,14 +105,12 @@ import net.runelite.client.hiscore.HiscoreResult;
 import net.runelite.client.hiscore.HiscoreSkill;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
-import net.runelite.client.task.Schedule;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.tuple.Pair;
 
 
 @Slf4j
@@ -124,7 +120,7 @@ import org.apache.commons.lang3.tuple.Pair;
 public class PvpPerformanceTrackerPlugin extends Plugin
 {
 	// static fields
-	public static final String PLUGIN_VERSION = "1.7.0";
+	public static final String PLUGIN_VERSION = "1.7.1a";
 	public static final String CONFIG_KEY = "pvpperformancetracker";
 	// Data folder naming history:
 	// "pvp-performance-tracker": From release, until 1.5.9 update @ 2024-08-19
@@ -312,6 +308,7 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 			case "showOverlayNames":
 			case "showOverlayOffPray":
 			case "showOverlayDeservedDmg":
+			case "showOverlayAverageDmg":
 			case "showOverlayDmgDealt":
 			case "showOverlayMagicHits":
 			case "showOverlayOffensivePray":
@@ -385,7 +382,7 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 			return;
 		}
 
-		stopFightIfOver();
+		checkForFightEnd();
 
 		// if the client player already has a valid opponent AND the fight has started,
 		// or the event source/target aren't players, skip any processing.
@@ -412,7 +409,7 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 			return;
 		}
 
-		// start a new fight with the new found opponent, if a new one.
+		// start a new fight with the newfound opponent, if a new one.
 		if (!hasOpponent() || !currentFight.getOpponent().getName().equals(opponent.getName()))
 		{
 			currentFight = new FightPerformance(client.getLocalPlayer(), (Player)opponent);
@@ -429,8 +426,6 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 		{
 			return;
 		}
-
-		sendUpdateChatMessages();
 
 		hiscoreEndpoint = HiscoreEndpoint.fromWorldTypes(client.getWorldType()); // Update endpoint on login/world change
 
@@ -459,10 +454,12 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 	@Subscribe
 	public void onAnimationChanged(AnimationChanged event)
 	{
-		stopFightIfOver();
+		if (!hasOpponent()) { return; }
 
-		// delay the animation processing, since we will also want to use equipment data for deserved
-		// damage, and equipment updates are loaded after the animation updates.
+		checkForFightEnd();
+
+		// delay the animation processing, since we will also want to use equipment data for avg damage,
+		// and equipment updates are loaded after the animation updates.
 		clientThread.invokeLater(() ->
 		{
 			if (hasOpponent() && event.getActor() instanceof Player && event.getActor().getName() != null)
@@ -476,17 +473,18 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 	// track damage dealt/taken
 	public void onHitsplatApplied(HitsplatApplied event)
 	{
-		int hitType = event.getHitsplat().getHitsplatType();
-		int amount = event.getHitsplat().getAmount();
-		Actor target = event.getActor();
+		Actor target;
 
 		// if there's no opponent, the target is not a player, or the hitsplat is not relevant to pvp damage,
 		// skip the hitsplat. Otherwise, add it to the fight, which will only include it if it is one of the
 		// Fighters in the fight being hit.
-		if (!hasOpponent() || !(target instanceof Player))
+		if (!hasOpponent() || !((target = event.getActor()) instanceof Player))
 		{
 			return;
 		}
+
+		int hitType = event.getHitsplat().getHitsplatType();
+		int amount = event.getHitsplat().getAmount();
 
 		// for non-zero hits, only process relevant hitsplat types
 		if (amount > 0)
@@ -607,6 +605,10 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
+		// if there is no ongoing fight, skip any onGameTick processing.
+		// We should have enough extra ticks to calc any hitsplats during death animations and empty these queues.
+		if (!hasOpponent()) { return; }
+
 		// Process hitsplats from the previous tick
 		int currentTick = client.getTickCount();
 		int tickToProcess = currentTick - 1;
@@ -614,7 +616,7 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 		List<HitsplatInfo> hitsplatsToProcess = hitsplatBuffer.remove(tickToProcess);
 
 		// --- START: New Pre-processing Logic ---
-		if (hitsplatsToProcess != null && !hitsplatsToProcess.isEmpty() && hasOpponent())
+		if (hitsplatsToProcess != null && !hitsplatsToProcess.isEmpty())
 		{
 			// 1. Calculate total expected hits from pending attacks for this tick
 			int totalExpectedAttackHits = 0;
@@ -673,7 +675,7 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 							otherPlayer = player;
 						}
 
-							// 4. Check Candidates (Vengeance/Recoil)
+						// 4. Check Candidates (Vengeance/Recoil)
 						if (otherPlayer != null)
 						{
 							List<HitsplatInfo> incomingHitsOnOther = incomingHitsplatsBuffer.get(tickToProcess);
@@ -710,7 +712,7 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 							}
 						}
 
-							// Burn Check removed: burn hitsplats are excluded earlier in onHitsplatApplied
+						// burn hitsplats are excluded earlier in onHitsplatApplied
 
 						// 5. Remove if Candidate Found
 						if (isCandidate)
@@ -735,7 +737,8 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 
 		// Cleanup happens regardless of whether hitsplats were processed this tick
 		// Check if hitsplatsToProcess became null or empty after pre-processing
-		if (hitsplatsToProcess == null || hitsplatsToProcess.isEmpty()) // Modified condition
+		// If there is no active fight anymore, avoid accessing currentFight below.
+		if (hitsplatsToProcess == null || hitsplatsToProcess.isEmpty() || !hasOpponent())
 		{
 			// Cleanup old entries from buffers
 			hitsplatBuffer.keySet().removeIf(tick -> tick < currentTick - maxWindow);
@@ -766,33 +769,39 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 				maxHpToUse = CONFIG.opponentHitpointsLevel();
 
 				// Hiscores lookup should only happen if not in LMS
-			if (opponent instanceof Player && opponent.getName() != null)
-			{
-				final HiscoreResult hiscoreResult = hiscoreManager.lookupAsync(opponent.getName(), hiscoreEndpoint);
-				if (hiscoreResult != null)
+				if (opponent.getName() != null)
 				{
-					final int hp = hiscoreResult.getSkill(HiscoreSkill.HITPOINTS).getLevel();
-					if (hp > 0)
+					final HiscoreResult hiscoreResult = hiscoreManager.lookupAsync(opponent.getName(), hiscoreEndpoint);
+					if (hiscoreResult != null)
 					{
-						maxHpToUse = hp; // Use Hiscores HP if available
+						final int hp = hiscoreResult.getSkill(HiscoreSkill.HITPOINTS).getLevel();
+						if (hp > 0)
+						{
+							maxHpToUse = hp; // Use Hiscores HP if available
+						}
 					}
 				}
 			}
-			}
 
-			// Determine attacker
+			// Determine attacker safely (handle null names and prefer identity when possible)
 			String actorName = ((Player) opponent).getName();
 			Fighter attacker;
-			if (actorName.equals(currentFight.getOpponent().getName()))
+			Player trackedOppPlayer = currentFight.getOpponent().getPlayer();
+			Player trackedCompPlayer = currentFight.getCompetitor().getPlayer();
+
+			boolean opponentIsTrackedOpponent = opponent == trackedOppPlayer || Objects.equals(actorName, currentFight.getOpponent().getName());
+			boolean opponentIsTrackedCompetitor = opponent == trackedCompPlayer || Objects.equals(actorName, currentFight.getCompetitor().getName());
+
+			if (opponentIsTrackedOpponent)
 			{
 				attacker = currentFight.getCompetitor();
 			}
-			else if (actorName.equals(currentFight.getCompetitor().getName()))
-						{
+			else if (opponentIsTrackedCompetitor)
+			{
 				attacker = currentFight.getOpponent();
-					}
-					else
-					{
+			}
+			else
+			{
 				return;
 			}
 
@@ -932,10 +941,10 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 				{
 					int originalMin = gmaulEntry.getMinHit();
 					int originalMax = gmaulEntry.getMaxHit();
-					double originalDeserved = gmaulEntry.getDeservedDamage();
+					double originalAvgDmg = gmaulEntry.getAvgDamage();
 					gmaulEntry.setMaxHit(originalMax * totalGmaulHitsMatchedThisTick);
 					gmaulEntry.setMinHit(originalMin * totalGmaulHitsMatchedThisTick);
-					gmaulEntry.setDeservedDamage(originalDeserved * totalGmaulHitsMatchedThisTick);
+					gmaulEntry.setAvgDamage(originalAvgDmg * totalGmaulHitsMatchedThisTick);
 				}
 			}
 		});
@@ -1049,27 +1058,37 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 		incomingHitsplatsBuffer.keySet().removeIf(tick -> tick < currentTick - maxWindow);
 	}
 
+	@Subscribe
+	public void onPlayerDespawned(PlayerDespawned event)
+	{
+		if (!hasOpponent()) { return; }
+		Player despawned = event.getPlayer();
+		if (despawned == null || despawned.getName() == null) { return; }
+
+		if (currentFight == null || currentFight.getOpponent() == null) { return; }
+		String opponentName = currentFight.getOpponent().getName();
+		if (opponentName == null) { return; }
+
+		// End fight when opponent despawns after a death was observed on either side
+		if (despawned.getName().equals(opponentName) && (currentFight.getOpponent().isDead() || currentFight.getCompetitor().isDead()))
+		{
+			onFightEnded();
+		}
+	}
+
 	// #################################################################################################################
 	// ################################## Plugin-specific functions & global helpers ###################################
 	// #################################################################################################################
 
-	private void sendUpdateChatMessages()
+	private void sendUpdateChatMessage()
 	{
-		if (!config.updateNoteMay72025Shown_v2())
+		if (!config.updateNote1_7_1())
 		{
 			chatMessageManager.queue(QueuedMessage.builder()
 					.type(ChatMessageType.GAMEMESSAGE)
-					.runeLiteFormattedMessage(config.updateNoteMay72025Shown_v2_MESSAGE)
+					.runeLiteFormattedMessage(config.updateNote1_7_1_MESSAGE)
 					.build());
-			configManager.setConfiguration(CONFIG_KEY, "updateNoteMay72025Shown_v2", true);
-		}
-		if (!config.updateNote1_7_0())
-		{
-			chatMessageManager.queue(QueuedMessage.builder()
-					.type(ChatMessageType.GAMEMESSAGE)
-					.runeLiteFormattedMessage(config.updateNote1_7_0_MESSAGE)
-					.build());
-			configManager.setConfiguration(CONFIG_KEY, "updateNote1_7_0", true);
+			configManager.setConfiguration(CONFIG_KEY, "updateNote1_7_1", true);
 		}
 	}
 
@@ -1100,6 +1119,7 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 		}
 
 		configManager.setConfiguration(CONFIG_KEY, "pluginVersion", PLUGIN_VERSION);
+		sendUpdateChatMessage();
 	}
 
 	// very basic update: We added the new hit on robe statistic, instantly recalculate it on launch,
@@ -1157,17 +1177,34 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 		return currentFight != null;
 	}
 
-	private void stopFightIfOver()
+
+	private void checkForFightEnd()
 	{
-		if (hasOpponent() && currentFight.isFightOver())
+		if (!hasOpponent()) { return; }
+
+		// ensure we check for death animations so that Fighter.isDead gets set properly, but we don't need to
+		// use the state of deaths for ending fights YET (not instantly), we do that within onPlayerDespawned
+		// in order to give everything time to process and allow time to check for double deaths, hitsplats etc
+		currentFight.checkForDeathAnimations();
+
+		// if the fight has been inactive for 20+ secs however (FightPerformance.NEW_FIGHT_DELAY, plus however long
+		// until they triggered an event for this check), just end it.
+		if (currentFight.isInactive())
 		{
-			// add fight to fight history if it actually started
-			if (currentFight.fightStarted())
-			{
-				addToFightHistory(currentFight);
-			}
-			currentFight = null;
+			onFightEnded();
 		}
+	}
+
+	private void onFightEnded()
+	{
+		// add fight to fight history if it actually started
+		if (currentFight.fightStarted())
+		{
+			addToFightHistory(currentFight);
+		}
+		currentFight = null;
+		hitsplatBuffer.clear();
+		incomingHitsplatsBuffer.clear();
 	}
 
 	// save the currently loaded fightHistory to the local json data so it is saved for the next client launch.

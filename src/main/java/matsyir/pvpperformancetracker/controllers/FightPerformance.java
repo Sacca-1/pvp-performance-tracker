@@ -329,35 +329,29 @@ public class FightPerformance implements Comparable<FightPerformance>
 		competitorPrevHp = currentHp;
 	}
 
-	// Will return true and stop the fight if the fight should be over.
-	// if either competitor hasn't fought in NEW_FIGHT_DELAY, or either competitor died.
-	// Will also add the currentFight to fightHistory if the fight ended.
-	public boolean isFightOver()
+	// Will return true if either competitor has died yet
+	// Completely ending the fight on despawn is handled by the plugin rather than within FightPerformance.
+	public boolean checkForDeathAnimations()
 	{
-		boolean isOver = false;
-		// if either competitor died, end the fight.
+		// If either competitor is playing a death animation, mark dead but do not end the fight here.
 		if (Arrays.stream(DEATH_ANIMATIONS).anyMatch(e -> e == opponent.getPlayer().getAnimation()))
 		{
 			opponent.died();
-			isOver = true;
 		}
 		if (Arrays.stream(DEATH_ANIMATIONS).anyMatch(e -> e == competitor.getPlayer().getAnimation()))
 		{
 			competitor.died();
-			isOver = true;
-		}
-		// If there was no fight actions in the last NEW_FIGHT_DELAY seconds
-		if (Duration.between(Instant.ofEpochMilli(lastFightTime), Instant.now()).compareTo(NEW_FIGHT_DELAY) > 0)
-		{
-			isOver = true;
 		}
 
-		if (isOver)
-		{
-			lastFightTime = Instant.now().toEpochMilli();
-		}
+		return competitor.isDead() || opponent.isDead();
+	}
 
-		return isOver;
+	// returns true if the fight is considered inactive due to time. We should end the fight when this happens
+	public boolean isInactive()
+	{
+		// If there was no fight actions in the last NEW_FIGHT_DELAY seconds, consider the fight done, because
+		// presumably either the player or the opponent ran away/teleported at this point.
+		return Duration.between(Instant.ofEpochMilli(lastFightTime), Instant.now()).compareTo(NEW_FIGHT_DELAY) > 0;
 	}
 
 	public ArrayList<FightLogEntry> getAllFightLogEntries()
@@ -396,14 +390,14 @@ public class FightPerformance implements Comparable<FightPerformance>
 		return opponent.calculateOffPraySuccessPercentage() > competitor.calculateOffPraySuccessPercentage();
 	}
 
-	public boolean competitorDeservedDmgIsGreater()
+	public boolean competitorAverageDmgIsGreater()
 	{
-		return competitor.getDeservedDamage() > opponent.getDeservedDamage();
+		return competitor.getAvgDamage() > opponent.getAvgDamage();
 	}
 
-	public boolean opponentDeservedDmgIsGreater()
+	public boolean opponentAverageDmgIsGreater()
 	{
-		return opponent.getDeservedDamage() > competitor.getDeservedDamage();
+		return opponent.getAvgDamage() > competitor.getAvgDamage();
 	}
 
 	public boolean competitorDmgDealtIsGreater()
@@ -418,27 +412,27 @@ public class FightPerformance implements Comparable<FightPerformance>
 
 	public boolean competitorMagicHitsLuckier()
 	{
-		double competitorRate = (competitor.getMagicHitCountDeserved() == 0) ? 0 :
-			(competitor.getMagicHitCount() / competitor.getMagicHitCountDeserved());
-		double opponentRate = (opponent.getMagicHitCountDeserved() == 0) ? 0 :
-			(opponent.getMagicHitCount() / opponent.getMagicHitCountDeserved());
+		double competitorRate = (competitor.getAvgMagicHitCount() == 0) ? 0 :
+			(competitor.getMagicHitCount() / competitor.getAvgMagicHitCount());
+		double opponentRate = (opponent.getAvgMagicHitCount() == 0) ? 0 :
+			(opponent.getMagicHitCount() / opponent.getAvgMagicHitCount());
 
 		return competitorRate > opponentRate;
 	}
 
 	public boolean opponentMagicHitsLuckier()
 	{
-		double competitorRate = (competitor.getMagicHitCountDeserved() == 0) ? 0 :
-			(competitor.getMagicHitCount() / competitor.getMagicHitCountDeserved());
-		double opponentRate = (opponent.getMagicHitCountDeserved() == 0) ? 0 :
-			(opponent.getMagicHitCount() / opponent.getMagicHitCountDeserved());
+		double competitorRate = (competitor.getAvgMagicHitCount() == 0) ? 0 :
+			(competitor.getMagicHitCount() / competitor.getAvgMagicHitCount());
+		double opponentRate = (opponent.getAvgMagicHitCount() == 0) ? 0 :
+			(opponent.getMagicHitCount() / opponent.getAvgMagicHitCount());
 
 		return opponentRate > competitorRate;
 	}
 
-	public double getCompetitorDeservedDmgDiff()
+	public double getCompetitorAverageDmgDiff()
 	{
-		return competitor.getDeservedDamage() - opponent.getDeservedDamage();
+		return competitor.getAvgDamage() - opponent.getAvgDamage();
 	}
 
 	public double getCompetitorDmgDealtDiff()
