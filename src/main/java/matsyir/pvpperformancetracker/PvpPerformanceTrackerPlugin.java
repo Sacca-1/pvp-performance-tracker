@@ -528,17 +528,12 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 			incomingHitsplatsBuffer.computeIfAbsent(currentTick, k -> new CopyOnWriteArrayList<>()).add(new HitsplatInfo(event));
 		}
 
-		// Buffer the hitsplat event instead of processing immediately (unless excluded earlier)
-		// Vengeance damage hitsplats WILL be included here initially.
-		HitsplatInfo info = new HitsplatInfo(event);
-		int tick = client.getTickCount();
-		List<HitsplatInfo> tickEvents = hitsplatBuffer.computeIfAbsent(tick, k -> new ArrayList<>());
-		tickEvents.add(info);
-
-<<<<<<< HEAD
-=======
-
->>>>>>> db712f1 (additional logic for claws-gmaul combo)
+			// Buffer the hitsplat event instead of processing immediately (unless excluded earlier)
+			// Vengeance damage hitsplats WILL be included here initially.
+			HitsplatInfo info = new HitsplatInfo(event);
+			int tick = client.getTickCount();
+			List<HitsplatInfo> tickEvents = hitsplatBuffer.computeIfAbsent(tick, k -> new ArrayList<>());
+			tickEvents.add(info);
 		// Get the HP of the actor on the client thread, after the hitsplat has been applied.
 		clientThread.invokeLater(() ->
 		{
@@ -557,15 +552,11 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 		Skill skill = statChanged.getSkill();
 		if (!hasOpponent()) { return; }
 
-		if (skill == Skill.HITPOINTS)
-		{
-			currentFight.updateCompetitorHp(client.getBoostedSkillLevel(Skill.HITPOINTS));
-		}
+			if (skill == Skill.HITPOINTS)
+			{
+				currentFight.updateCompetitorHp(client.getBoostedSkillLevel(Skill.HITPOINTS));
+			}
 
-<<<<<<< HEAD
-=======
-
->>>>>>> db712f1 (additional logic for claws-gmaul combo)
 		if (skill == Skill.MAGIC)
 		{
 			int magicXp = client.getSkillExperience(Skill.MAGIC);
@@ -866,32 +857,25 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 					// Gmaul can hit twice, others match expected hits
 					int hitsToFind = entry.isGmaulSpecial() ? 2 : toMatch;
 
-<<<<<<< HEAD
-=======
-					// Enforce Dragon Claws 2+2: limit phase-1 to 2 total matched hits.
-					// Use matchedHitsCount (<2 => still phase-1), since animation tick vs damage tick can slip.
-					if (entry.getAnimationData() == AnimationData.MELEE_DRAGON_CLAWS_SPEC && entry.getMatchedHitsCount() < 2)
-					{
-						int remainingPhase1 = Math.max(0, 2 - entry.getMatchedHitsCount());
-						hitsToFind = Math.min(hitsToFind, remainingPhase1);
-					}
-
-					// Simple double-GMaul gate: if a non-GMaul special directly preceded this GMaul (prev tick),
-					// cap this GMaul entry to a single hit. Allows true doubles when no prior special just occurred.
-					if (entry.isGmaulSpecial())
-					{
-						Integer lastSpec = lastNonGmaulSpecTickByAttacker.get(attacker.getName());
-						if (lastSpec != null && lastSpec == entry.getTick() - 1)
+						// Enforce Dragon Claws 2+2: limit phase-1 to 2 total matched hits.
+						// Use matchedHitsCount (<2 => still phase-1), since animation tick vs damage tick can slip.
+						if (entry.getAnimationData() == AnimationData.MELEE_DRAGON_CLAWS_SPEC && entry.getMatchedHitsCount() < 2)
 						{
-							int original = hitsToFind;
-							hitsToFind = Math.min(hitsToFind, 1);
-                    // no logging
+							int remainingPhase1 = Math.max(0, 2 - entry.getMatchedHitsCount());
+							hitsToFind = Math.min(hitsToFind, remainingPhase1);
 						}
-					}
 
-					// Debug: snapshot hits list before matching for ordered logging (only for claws/gmaul)
-
->>>>>>> db712f1 (additional logic for claws-gmaul combo)
+						// Simple double-GMaul gate: if a non-GMaul special directly preceded this GMaul (prev tick),
+						// cap this GMaul entry to a single hit. Allows true doubles when no prior special just occurred.
+						if (entry.isGmaulSpecial())
+						{
+							Integer lastSpec = lastNonGmaulSpecTickByAttacker.get(attacker.getName());
+							if (lastSpec != null && lastSpec == entry.getTick() - 1)
+							{
+								int original = hitsToFind;
+								hitsToFind = Math.min(hitsToFind, 1);
+							}
+						}
 					while (matchedThisCycle < hitsToFind && hitsIter.hasNext())
 					{
 						HitsplatInfo hInfo = hitsIter.next();
@@ -900,10 +884,7 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 						matchedThisCycle++;
 						lastMatchedInfo = hInfo;
 						hitsIter.remove();
-<<<<<<< HEAD
-=======
 
->>>>>>> db712f1 (additional logic for claws-gmaul combo)
 					}
 
 					if (matchedThisCycle > 0)
@@ -943,12 +924,7 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 						{
 							entry.setEstimatedHpBeforeHit(hpBefore);
 							entry.setOpponentMaxHp(maxHpToUse);
-						}
-
-<<<<<<< HEAD
-=======
-
->>>>>>> db712f1 (additional logic for claws-gmaul combo)
+							}
 						// Capture phase snapshots for Dragon Claws (2 hits tick k, 2 hits tick k+1)
 						if (entry.getAnimationData() == AnimationData.MELEE_DRAGON_CLAWS_SPEC)
 						{
@@ -970,19 +946,11 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 				}
 
 				// Mark entry as fully processed if all expected hits are matched OR if it's an instant Gmaul (even if only 1 hit matched)
-<<<<<<< HEAD
-				if (entry.getMatchedHitsCount() >= entry.getExpectedHits() || isInstantGmaulCheck)
-				{
-					entry.setKoChanceCalculated(true);
-					attacker.getPendingAttacks().remove(entry);
-				}
-=======
-					if (entry.getMatchedHitsCount() >= entry.getExpectedHits() || isInstantGmaulCheck)
-					{
-						entry.setKoChanceCalculated(true);
-						attacker.getPendingAttacks().remove(entry);
-					}
->>>>>>> db712f1 (additional logic for claws-gmaul combo)
+						if (entry.getMatchedHitsCount() >= entry.getExpectedHits() || isInstantGmaulCheck)
+						{
+							entry.setKoChanceCalculated(true);
+							attacker.getPendingAttacks().remove(entry);
+						}
 			}
 
 			// Gmaul Damage Scaling (Applied after all matching for the tick)
@@ -1084,24 +1052,14 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 							koChanceCurrent = (hpBeforeCurrent != null)
 								? PvpPerformanceTrackerUtils.calculateKoChance(entry.getAccuracy(), entry.getMinHit(), entry.getMaxHit(), hpBeforeCurrent)
 								: null;
-<<<<<<< HEAD
-=======
-							if (entry.getAnimationData() == AnimationData.MELEE_GRANITE_MAUL_SPEC)
-							{
-							}
->>>>>>> db712f1 (additional logic for claws-gmaul combo)
+
 						}
 
 						// Do not record/display zero-percent KO chances
 						if (koChanceCurrent != null && koChanceCurrent <= 0.0)
 						{
 							koChanceCurrent = null;
-<<<<<<< HEAD
-=======
-							if (entry.getAnimationData() == AnimationData.MELEE_DRAGON_CLAWS_SPEC || entry.getAnimationData() == AnimationData.MELEE_GRANITE_MAUL_SPEC)
-							{
-							}
->>>>>>> db712f1 (additional logic for claws-gmaul combo)
+
 						}
 						entry.setDisplayKoChance(koChanceCurrent);
 						entry.setKoChance(koChanceCurrent);
@@ -1140,16 +1098,13 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 		}
 	}
 
-<<<<<<< HEAD
-=======
 
-	// --- Record last non-GMaul special tick for an attacker ---
-	public void recordNonGmaulSpecial(String attackerName, int tick)
-	{
-		if (attackerName == null) { return; }
-		lastNonGmaulSpecTickByAttacker.put(attackerName, tick);
-	}
->>>>>>> db712f1 (additional logic for claws-gmaul combo)
+		// --- Record last non-GMaul special tick for an attacker ---
+		public void recordNonGmaulSpecial(String attackerName, int tick)
+		{
+			if (attackerName == null) { return; }
+			lastNonGmaulSpecTickByAttacker.put(attackerName, tick);
+		}
 	// #################################################################################################################
 	// ################################## Plugin-specific functions & global helpers ###################################
 	// #################################################################################################################
