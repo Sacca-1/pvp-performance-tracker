@@ -182,11 +182,19 @@ class Fighter
 	// Levels can be null
 	void addAttack(Player opponent, AnimationData animationData, int offensivePray, CombatLevels levels, int attackTick, long attackTime)
 	{
-		addAttack(opponent, animationData, offensivePray, levels, null, attackTick, attackTime);
+		addAttack(opponent, animationData, offensivePray, levels, null, null, 99, attackTick, attackTime);
 	}
 
 	// Levels can be null when that player's current boosted/drained stats are not visible locally.
 	void addAttack(Player opponent, AnimationData animationData, int offensivePray, CombatLevels attackerLevels, CombatLevels defenderLevels, int attackTick, long attackTime)
+	{
+		addAttack(opponent, animationData, offensivePray, attackerLevels, defenderLevels, null, 99, attackTick, attackTime);
+	}
+
+	// Estimated HP is only used for observed non-local attacks.
+	// Exact combat levels remain unavailable until PvP-Hub sync.
+	void addAttack(Player opponent, AnimationData animationData, int offensivePray, CombatLevels attackerLevels,
+		CombatLevels defenderLevels, Integer estimatedAttackerHp, int attackerMaxHp, int attackTick, long attackTime)
 	{
 		int[] attackerItems = player.getPlayerComposition().getEquipmentIds();
 
@@ -245,7 +253,10 @@ class Fighter
 			staffMeleeReduction = hasStaffMeleeReduction(opponent);
 		}
 
-		pvpDamageCalc.updateDamageStats(player, opponent, successful, animationData, offensivePray, attackerLevels, defenderLevels);
+		int attackerCurrentHp = attackerLevels != null ? attackerLevels.hp :
+			estimatedAttackerHp != null ? estimatedAttackerHp : attackerMaxHp;
+		pvpDamageCalc.updateDamageStats(player, opponent, successful, animationData, offensivePray, attackerLevels,
+			defenderLevels, attackerCurrentHp, attackerMaxHp);
 		if (elyProc)
 		{
 			pvpDamageCalc.applyElysianReduction();
@@ -268,6 +279,7 @@ class Fighter
 		}
 
 		FightLogEntry fightLogEntry = new FightLogEntry(player, opponent, pvpDamageCalc, offensivePray, attackerLevels, animationData, attackTick, attackTime);
+		fightLogEntry.setAttackerEstimatedHp(estimatedAttackerHp);
 		fightLogEntry.setDefenderElyProc(elyProc);
 		fightLogEntry.setDefenderSotdMeleeReductionProc(staffMeleeReduction);
 		fightLogEntry.setGmaulSpecial(isGmaulSpec);

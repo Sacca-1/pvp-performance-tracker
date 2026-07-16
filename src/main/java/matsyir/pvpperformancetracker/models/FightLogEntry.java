@@ -110,6 +110,10 @@ public class FightLogEntry implements Comparable<FightLogEntry>
 	@SerializedName("C")
 	@Setter
 	private CombatLevels attackerLevels; // CAN BE NULL
+	@Expose
+	@SerializedName("aH")
+	@Setter
+	private Integer attackerEstimatedHp; // Used only when the attacker's exact C.h is unavailable.
 
 	@Getter
 	@Setter
@@ -428,6 +432,25 @@ public class FightLogEntry implements Comparable<FightLogEntry>
 	public String getHitRange()
 	{
 		return minHit + "-" + maxHit;
+	}
+
+	public String getDharokHpAtAttackText(int maxHp)
+	{
+		if (!PvpDamageCalc.isFullDharokSet(attackerGear))
+		{
+			return "-";
+		}
+
+		maxHp = Math.max(1, maxHp);
+		if (attackerLevels != null)
+		{
+			return attackerLevels.hp + "/" + maxHp;
+		}
+		if (attackerEstimatedHp != null)
+		{
+			return "~" + attackerEstimatedHp + "/" + maxHp;
+		}
+		return "-";
 	}
 
 	// use to sort by last fight time, to sort fights by date/time.

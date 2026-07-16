@@ -1245,6 +1245,11 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 						// Update HP for the next iteration
 						currentHp = hpAfterCurrent;
 				}
+
+					if (Objects.equals(attackerName, currentFight.getCompetitor().getName()) && currentHp != null)
+					{
+						currentFight.updateOpponentEstimatedHp(currentHp);
+					}
 				});
 			});
 		}

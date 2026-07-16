@@ -26,6 +26,7 @@
 package matsyir.pvpperformancetracker.controllers;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
@@ -167,12 +168,30 @@ public class PvpHubUploader
 	static String serializeFightUpload(FightPerformance fight, Gson gson, int publicDelaySeconds, String hiddenName)
 	{
 		JsonObject payload = gson.toJsonTree(new FightUploadPayload(fight, publicDelaySeconds)).getAsJsonObject();
+		removeAttackerEstimatedHp(payload.getAsJsonObject("c"));
+		removeAttackerEstimatedHp(payload.getAsJsonObject("o"));
 		if (hiddenName != null && !hiddenName.trim().isEmpty())
 		{
 			payload.getAsJsonObject("c").addProperty("n", hiddenName);
 		}
 
 		return gson.toJson(payload);
+	}
+
+	private static void removeAttackerEstimatedHp(JsonObject fighter)
+	{
+		if (fighter == null || !fighter.has("l") || !fighter.get("l").isJsonArray())
+		{
+			return;
+		}
+
+		for (JsonElement entry : fighter.getAsJsonArray("l"))
+		{
+			if (entry.isJsonObject())
+			{
+				entry.getAsJsonObject().remove("aH");
+			}
+		}
 	}
 
 	static final class FightUploadPayload

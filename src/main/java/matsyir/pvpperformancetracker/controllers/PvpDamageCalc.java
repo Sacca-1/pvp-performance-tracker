@@ -193,6 +193,16 @@ public class PvpDamageCalc
 	// Levels can be null when the client cannot observe that side's boosted/drained stats.
 	public void updateDamageStats(Player attacker, Player defender, boolean success, AnimationData animationData, int offensivePray, CombatLevels currentAttackerLevels, CombatLevels currentDefenderLevels)
 	{
+		int attackerMaxHp = getDefaultCombatLevels().hp;
+		int attackerCurrentHp = currentAttackerLevels != null ? currentAttackerLevels.hp : attackerMaxHp;
+		updateDamageStats(attacker, defender, success, animationData, offensivePray, currentAttackerLevels, currentDefenderLevels,
+			attackerCurrentHp, attackerMaxHp);
+	}
+
+	// Dharok's current/max HP are passed separately so observed opponents can keep their combat levels unknown.
+	public void updateDamageStats(Player attacker, Player defender, boolean success, AnimationData animationData, int offensivePray,
+		CombatLevels currentAttackerLevels, CombatLevels currentDefenderLevels, int attackerCurrentHp, int attackerMaxHp)
+	{
 		// shouldn't be possible, but just in case
 		if (attacker == null || defender == null) { return; }
 
@@ -232,6 +242,7 @@ public class PvpDamageCalc
 		if (attackStyle.isMelee() || animationData == AnimationData.MELEE_VOIDWAKER_SPEC)
 		{
 			getMeleeMaxHit(playerStats[STRENGTH_BONUS], isSpecial, weapon, voidStyle, offensivePray);
+			applyDharokSetEffect(attackerItems, attackerCurrentHp, attackerMaxHp);
 			getMeleeAccuracy(playerStats, opponentStats, attackStyle, isSpecial, weapon, voidStyle, offensivePray, defencePrayerModifier);
 		}
 		else if (attackStyle == AttackStyle.RANGED)
@@ -336,6 +347,40 @@ public class PvpDamageCalc
 		{
 			applyStaffMeleeReduction();
 		}
+	}
+
+	public static boolean isFullDharokSet(int[] equipment)
+	{
+		int lastRequiredIndex = Math.max(Math.max(KitType.HEAD.getIndex(), KitType.WEAPON.getIndex()),
+			Math.max(KitType.TORSO.getIndex(), KitType.LEGS.getIndex()));
+		if (equipment == null || equipment.length <= lastRequiredIndex)
+		{
+			return false;
+		}
+
+		return EquipmentData.fromId(fixItemId(equipment[KitType.HEAD.getIndex()])) == EquipmentData.DHAROKS_HELM &&
+			EquipmentData.fromId(fixItemId(equipment[KitType.WEAPON.getIndex()])) == EquipmentData.DHAROKS_GREATAXE &&
+			EquipmentData.fromId(fixItemId(equipment[KitType.TORSO.getIndex()])) == EquipmentData.DHAROKS_PLATEBODY &&
+			EquipmentData.fromId(fixItemId(equipment[KitType.LEGS.getIndex()])) == EquipmentData.DHAROKS_PLATELEGS;
+	}
+
+	static int scaleDharokMaxHit(int baseMaxHit, int currentHp, int maxHp)
+	{
+		baseMaxHit = Math.max(0, baseMaxHit);
+		maxHp = Math.max(1, maxHp);
+		int missingHp = Math.max(0, maxHp - Math.max(0, currentHp));
+		long modifierNumerator = 10000L + (long) missingHp * maxHp;
+		return (int) ((baseMaxHit * modifierNumerator) / 10000L);
+	}
+
+	private void applyDharokSetEffect(int[] equipment, int currentHp, int maxHp)
+	{
+		if (!isFullDharokSet(equipment))
+		{
+			return;
+		}
+
+		maxHit = scaleDharokMaxHit(maxHit, currentHp, maxHp);
 	}
 
 	private CombatLevels getDefaultCombatLevels()
