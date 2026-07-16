@@ -278,8 +278,19 @@ public class PvpDamageCalc
 	// secondary function used to analyze fights from the fight log (fight analysis/fight merge)
 	public void updateDamageStats(FightLogEntry atkLog, FightLogEntry defenderLog)
 	{
+		updateDamageStats(atkLog, defenderLog, null, 0);
+	}
+
+	void updateDamageStats(FightLogEntry atkLog, int attackerCurrentHp, int attackerMaxHp)
+	{
+		updateDamageStats(atkLog, null, attackerCurrentHp, attackerMaxHp);
+	}
+
+	private void updateDamageStats(FightLogEntry atkLog, FightLogEntry defenderLog, Integer attackerCurrentHp, int attackerMaxHp)
+	{
 		this.attackerLevels = atkLog.getAttackerLevels() != null ? atkLog.getAttackerLevels() : getDefaultCombatLevels();
-		this.defenderLevels = defenderLog.getAttackerLevels() != null ? defenderLog.getAttackerLevels() : getDefaultCombatLevels();
+		this.defenderLevels = defenderLog != null && defenderLog.getAttackerLevels() != null ?
+			defenderLog.getAttackerLevels() : getDefaultCombatLevels();
 		int[] attackerItems = atkLog.getAttackerGear();
 		int[] defenderItems = atkLog.getDefenderGear();
 		boolean success = atkLog.success();
@@ -297,7 +308,8 @@ public class PvpDamageCalc
 
 		EquipmentData weapon = EquipmentData.fromId(fixItemId(attackerItems[KitType.WEAPON.getIndex()]));
 
-		int[] playerStats = this.calculateBonuses(attackerItems);
+		RingData loggedRing = atkLog.getAttackerRingItemId() != null ? RingData.fromId(atkLog.getAttackerRingItemId()) : ringUsed;
+		int[] playerStats = attackerCurrentHp != null ? calculateBonuses(attackerItems, loggedRing) : this.calculateBonuses(attackerItems);
 		int[] opponentStats = this.calculateBonuses(defenderItems);
 		AnimationData.AttackStyle attackStyle = animationData.attackStyle; // basic style: stab/slash/crush/ranged/magic
 		Integer attackerAmmoItemId = atkLog.getAttackerAmmoItemId();
@@ -311,7 +323,15 @@ public class PvpDamageCalc
 		if (attackStyle.isMelee())
 		{
 			getMeleeMaxHit(playerStats[STRENGTH_BONUS], isSpecial, weapon, voidStyle, offensivePray);
-			getMeleeAccuracy(playerStats, opponentStats, attackStyle, isSpecial, weapon, voidStyle, offensivePray, PIETY_DEF_PRAYER_MODIFIER);
+			if (attackerCurrentHp != null)
+			{
+				applyDharokSetEffect(attackerItems, attackerCurrentHp, attackerMaxHp);
+				accuracy = atkLog.getAccuracy();
+			}
+			else
+			{
+				getMeleeAccuracy(playerStats, opponentStats, attackStyle, isSpecial, weapon, voidStyle, offensivePray, PIETY_DEF_PRAYER_MODIFIER);
+			}
 		}
 		else if (attackStyle == AttackStyle.RANGED)
 		{

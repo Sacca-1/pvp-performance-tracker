@@ -1562,11 +1562,12 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 				{
 					try
 					{
+						fight.getPvpHubDisplayFight().recalculateDharokAttacks();
 						fight.getPvpHubDisplayFight().calculateRobeHits(config.robeHitFilter());
 					}
 					catch (Exception e)
 					{
-						log.warn("Error recalculating synced PvP-Hub robe hits {}: {}: {}", fight.getFightId(), e.getClass().getSimpleName(), e.getMessage());
+						log.warn("Error recalculating synced PvP-Hub fight {}: {}: {}", fight.getFightId(), e.getClass().getSimpleName(), e.getMessage());
 					}
 
 					SwingUtilities.invokeLater(() -> {
@@ -1639,6 +1640,7 @@ public class PvpPerformanceTrackerPlugin extends Plugin
 		try
 		{
 			fight.setPvpHubSyncedFight(syncedFight);
+			fight.getPvpHubDisplayFight().recalculateDharokAttacks();
 		}
 		catch (Exception e)
 		{

@@ -295,6 +295,12 @@ class Fighter
 		pendingAttacks.add(fightLogEntry);
 	}
 
+	// Keep the aggregate in sync when PvP-Hub supplies a different attack-time HP.
+	void adjustExpectedDamage(double delta)
+	{
+		expectedDamage += delta;
+	}
+
 	public void addGhostBarrage(boolean successful, Player opponent, AnimationData animationData, int offensivePray, CombatLevels attackerLevels)
 	{
 		int currentTick = PLUGIN.getClient().getTickCount();

@@ -460,6 +460,43 @@ public class FightPerformance implements Comparable<FightPerformance>
 		return entry == null ? "-" : entry.getDharokHpAtAttackText(getFighterMaxHp(getAttacker(entry)));
 	}
 
+	public void recalculateDharokAttacks()
+	{
+		recalculateDharokAttacks(competitor);
+		recalculateDharokAttacks(opponent);
+	}
+
+	private void recalculateDharokAttacks(Fighter fighter)
+	{
+		if (fighter == null || fighter.getFightLogEntries() == null)
+		{
+			return;
+		}
+
+		PvpDamageCalc damageCalc = null;
+		int maxHp = -1;
+		for (FightLogEntry entry : fighter.getFightLogEntries())
+		{
+			if (!entry.isFullEntry() || entry.getAttackerLevels() == null || !PvpDamageCalc.isFullDharokSet(entry.getAttackerGear()))
+			{
+				continue;
+			}
+
+			if (damageCalc == null)
+			{
+				maxHp = getFighterMaxHp(fighter);
+				damageCalc = new PvpDamageCalc(this);
+			}
+
+			double previousExpectedDamage = entry.getExpectedDamage();
+			damageCalc.updateDamageStats(entry, entry.getAttackerLevels().hp, maxHp);
+			entry.setExpectedDamage(damageCalc.getAverageHit());
+			entry.setMinHit(damageCalc.getMinHit());
+			entry.setMaxHit(damageCalc.getMaxHit());
+			fighter.adjustExpectedDamage(entry.getExpectedDamage() - previousExpectedDamage);
+		}
+	}
+
 	private Fighter getAttacker(FightLogEntry entry)
 	{
 		if (entry != null && competitor != null && Objects.equals(entry.getAttackerName(), competitor.getName()))
